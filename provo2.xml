@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.59 e21c39fe">
+  <way id="10187190">
+    <nd ref="84071068"/>
+    <nd ref="84071070"/>
+    <nd ref="84071072"/>
+    <nd ref="84071074"/>
+    <nd ref="84071078"/>
+    <nd ref="84071080"/>
+    <nd ref="84071082"/>
+    <nd ref="84071083"/>
+    <nd ref="84071085"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="West 4630 North"/>
+    <tag k="name_1" v="West 4630 North Street"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="tiger:cfcc" v="A41"/>
+    <tag k="tiger:county" v="Utah, UT"/>
+    <tag k="tiger:name_base" v="4630"/>
+    <tag k="tiger:name_base_1" v="4630 North"/>
+    <tag k="tiger:name_direction_prefix" v="W"/>
+    <tag k="tiger:name_direction_prefix_1" v="W"/>
+    <tag k="tiger:name_direction_suffix" v="N"/>
+    <tag k="tiger:name_type_1" v="St"/>
+  </way>
+
+  <node id="84071068" lat="40.2957690" lon="-111.6635490"/>
+  <node id="84071070" lat="40.2956760" lon="-111.6640300"/>
+  <node id="84071072" lat="40.2957260" lon="-111.6641220"/>
+  <node id="84071074" lat="40.2957242" lon="-111.6646390"/>
+  <node id="84071078" lat="40.2956474" lon="-111.6651590"/>
+  <node id="84071080" lat="40.2956244" lon="-111.6654467"/>
+  <node id="84071082" lat="40.2955552" lon="-111.6659087"/>
+  <node id="84071083" lat="40.2955452" lon="-111.6666337"/>
+  <node id="84071085" lat="40.2955502" lon="-111.6669287"/>
+</osm>
