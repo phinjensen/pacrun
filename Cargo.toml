@@ -10,7 +10,7 @@ geo = "0.24.1"
 geo-types = { version = "0.7.9", features = ["use-rstar_0_10"] }
 geojson = "0.24.0"
 gpx = "0.8.6"
-osm-xml = { version = "0.6.2", path = "../osm-xml" }
+osm-xml = { git = "https://github.com/phinjensen/osm-xml.git", version = "0.6.2" }
 rstar = "0.10.0"
 serde-xml-rs = "0.6.0"
 serde_json = "1.0.95"
