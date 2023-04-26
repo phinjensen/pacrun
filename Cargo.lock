@@ -285,6 +285,7 @@ dependencies = [
 [[package]]
 name = "osm-xml"
 version = "0.6.2"
+source = "git+https://github.com/phinjensen/osm-xml.git#60f2f177b40ce0748f98e8a24be6d3c46695753c"
 dependencies = [
  "fnv",
  "xml-rs 0.7.0",
