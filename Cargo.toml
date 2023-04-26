@@ -6,7 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-geo-types = "0.7.9"
+geo = "0.24.1"
+geo-types = { version = "0.7.9", features = ["use-rstar_0_10"] }
+geojson = "0.24.0"
+gpx = "0.8.6"
 osm-xml = { version = "0.6.2", path = "../osm-xml" }
+rstar = "0.10.0"
 serde-xml-rs = "0.6.0"
 serde_json = "1.0.95"
