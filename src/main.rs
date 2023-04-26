@@ -1,12 +1,16 @@
 use std::{
+    collections::HashMap,
     fs::File,
     io::{self, BufReader},
 };
 
-use geo_types::{coord, Coord, Geometry, LineString, Point};
+use geo::{GeodesicDistance, GeodesicLength, Line, LineInterpolatePoint};
+use geo_types::{coord, Geometry, LineString, Point, Polygon};
+use geojson::{Feature, FeatureCollection, Value};
 use osm_xml::{Node, Reference, Way, OSM};
+use rstar::RTree;
 
-pub fn node_to_geo(osm: OSM, node: Node) -> Result<Geometry, String> {
+pub fn node_to_geo(node: Node) -> Result<Geometry, String> {
     Ok(Point::new(node.lon, node.lat).into())
 }
 
@@ -18,11 +22,10 @@ pub fn way_to_geo(osm: &OSM, way: &Way) -> Result<Geometry, String> {
     }
 
     // All items in a Way should be
-    let points: Result<Vec<_>, String> = way
+    let points: Vec<_> = way
         .nodes
         .iter()
         .map(|ref_| {
-            println!("{:?}", osm.resolve_reference(ref_));
             if let Reference::Node(node) = osm.resolve_reference(ref_) {
                 Ok(coord! {
                     x: node.lon,
@@ -32,97 +35,107 @@ pub fn way_to_geo(osm: &OSM, way: &Way) -> Result<Geometry, String> {
                 Err("Grr".to_string())
             }
         })
-        .collect();
-    println!("{:?}", points);
+        .collect::<Result<Vec<_>, String>>()?;
 
     // Default to a LineString, but wrap it in a Polygon if it fits the requirements
     let line = LineString::new(points);
-    if let Some(tags) = &meta.tags {
-        if nodes.first().unwrap().0 == nodes.last().unwrap().0 && is_polygon_feature(tags) {
-            return Ok(Polygon::new(line, vec![]).into());
-        }
+    if way.is_polygon() {
+        Ok(Polygon::new(line, vec![]).into())
+    } else {
+        Ok(line.into())
     }
-    Ok(line.into())
 }
 
-//pub fn to_geo(osm: OSM) -> Result<Geometry, Error> {
-//        Element::Way { nodes, meta } => {
-//        }
-//        Element::Relation { members, meta } => {
-//            if members.is_empty() {
-//                Err(Error::InvalidData)
-//            } else if let Some(tags) = &meta.tags {
-//                let type_tag = match tags.get("type") {
-//                    Some(t) => t.as_str(),
-//                    _ => "",
-//                };
-//                // Convert a relation into a MultiPolygon if it has the tag type=multipolygon or type=boundary
-//                if type_tag == "multipolygon" || type_tag == "boundary" {
-//                    // A multipolygon relation should have at least one outer member
-//                    let outer_members = members
-//                        .iter()
-//                        .filter(|member| member.role == "outer")
-//                        .collect::<Vec<_>>();
-//                    if outer_members.is_empty() {
-//                        return Err(Error::InvalidData);
-//                    }
-//
-//                    // Each outer member should be a way
-//                    let outer_ways = outer_members
-//                        .iter()
-//                        .filter_map(|member| element_map.get(&member._ref.0))
-//                        .map(|e| e.as_ref())
-//                        .collect::<Vec<_>>();
-//
-//                    // Each outer way should be a closed ring
-//                    let mut polygons = join_ways(outer_ways, element_map)?
-//                        .into_iter()
-//                        .map(|ring| Polygon::new(ring, vec![]))
-//                        .collect::<Vec<_>>();
-//
-//                    let inner_ways = members
-//                        .iter()
-//                        .filter(|member| member.role == "inner")
-//                        .filter_map(|member| element_map.get(&member._ref.0))
-//                        .map(|e| e.as_ref())
-//                        .collect::<Vec<_>>();
-//
-//                    // Each outer way should be a closed ring
-//                    let inner_rings = join_ways(inner_ways, element_map)?;
-//                    if inner_rings.iter().any(|ring| ring.is_closed()) {
-//                        return Err(Error::InvalidData);
-//                    }
-//
-//                    for polygon in &mut polygons {
-//                        for ring in &inner_rings {
-//                            if polygons_intersect_ls(polygon.exterior(), ring) {
-//                                polygon.interiors_push(ring.clone())
-//                            }
-//                        }
-//                    }
-//                    Ok(MultiPolygon::new(polygons).into())
-//                } else {
-//                    Err(Error::InvalidData)
-//                }
-//            } else {
-//                Err(Error::InvalidData)
-//            }
-//        }
-//    }
-//}
-
 fn main() -> io::Result<()> {
-    let f = File::open("provo2.xml")?;
-    let reader = BufReader::new(f);
-    let d = OSM::parse(reader).unwrap();
+    let street_file = File::open("provo.xml")?;
+    let reader = BufReader::new(street_file);
+    let osm = OSM::parse(reader).unwrap();
+    let streets: Vec<_> = osm
+        .ways
+        .iter()
+        .filter_map(|(_, way)| {
+            if let Ok(geo_types::Geometry::LineString(street)) = way_to_geo(&osm, way) {
+                Some((way.id, street))
+            } else {
+                None
+            }
+        })
+        .collect();
 
-    println!("{:?}", way_to_geo(&d, d.ways.get(&10187190).unwrap()));
+    let run_file = File::open("run.gpx")?;
+    let reader = BufReader::new(run_file);
+    let gpx = gpx::read(reader).unwrap();
+    let gpx_tree = RTree::bulk_load(
+        gpx.tracks
+            .iter()
+            .flat_map(|track| track.segments.iter().flat_map(|segment| &segment.points))
+            .map(|p| p.point())
+            .collect::<Vec<_>>(),
+    );
 
-    //if let Some(tags) = &first_element.tags {
-    //    for (key, value) in tags.iter() {
-    //        println!("{}: {}", key, value);
-    //    }
-    //}
-    //println!("GEO: {:?}", first_element.to_geo(&d.element_map()).unwrap());
+    let mut matches = HashMap::new();
+    for (id, street) in &streets {
+        matches.insert(id, Vec::new());
+        for line in street.lines() {
+            let length = line.geodesic_length();
+            let mut start = None;
+            let mut end = None;
+            for meters in (0..length as u64).step_by(3) {
+                let point = line.line_interpolate_point(meters as f64 / length).unwrap();
+                let nearest_neighbor = gpx_tree.nearest_neighbor(&point).unwrap();
+                if point.geodesic_distance(nearest_neighbor) < 10.0 {
+                    if start.is_none() {
+                        start = Some(point);
+                    }
+                    end = Some(point);
+                } else if start.is_some() {
+                    let v = matches.get_mut(id).unwrap();
+                    v.push(start.unwrap());
+                    v.push(end.unwrap());
+                }
+            }
+        }
+    }
+
+    let collection = FeatureCollection {
+        bbox: None,
+        features: matches
+            .iter()
+            .filter(|(_, lines)| lines.len() > 0)
+            .map(|(_, lines)| Feature {
+                geometry: Some(geojson::Geometry {
+                    bbox: None,
+                    value: Value::from(&geo_types::LineString::from(lines.clone())),
+                    foreign_members: None,
+                }),
+                bbox: None,
+                id: None,
+                properties: None,
+                foreign_members: None,
+            })
+            .collect::<Vec<_>>(),
+        foreign_members: None,
+    };
+    println!("{}", collection.to_string());
+
+    // This algorithm is
+    //  O(g log g + s*l*log g) where
+    //      g: num of points in GPX track
+    //      s: num of streets in OSM area
+    //      l: length of longest street in OSM area
+    // Put all points in gpx into rtree O(g log g)
+    // for every street (in OSM) O(s)
+    //   iterate over 3 m points for each line segment
+    //   start = first point
+    //   end = first point
+    //   for (0..len(line)).step_by(3) O(len(longest s))
+    //      tree.nearest_neighbor(point) O(log n)
+    //      if distance to nearest neighbor < 3m:
+    //          end = point
+    //      else:
+    //          add start, end to matches
+    //          start = point
+    //          end = point
+
     Ok(())
 }
