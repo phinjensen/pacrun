@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::process::Command;
 use std::str;
 
@@ -88,31 +89,33 @@ impl OsrmApi {
     }
 }
 
-//struct WayMatch {
-//    id: u64,
-//    start_point: (f64, f64),
-//    end_point: (f64, f64),
-//}
-//
-//fn get_way_matches(data: OsrmResponse) -> Vec<WayMatch> {
-//    let mut way_matches: Vec<WayMatch> = Vec::new();
-//    for tracepoint in data.tracepoints {
-//        if tracepoint.is_none() {
-//            continue;
-//        }
-//        let tracepoint = tracepoint.unwrap();
-//        let id: u64 = tracepoint.name.parse().unwrap();
-//        let last_match = way_matches.last();
-//        if last_match.is_none() || last_match.unwrap().id != id {
-//            way_matches.push(WayMatch {
-//                id,
-//                start_point: tracepoint.location,
-//                end_point: tracepoint.location,
-//            });
-//        } else {
-//            let mut last = way_matches.last_mut().unwrap();
-//            last.end_point = tracepoint.location;
-//        }
-//    }
-//    way_matches
-//}
+impl OsrmResponse {
+    pub fn get_segment_matches(&self) -> HashMap<(u64, u64), Vec<(f64, f64)>> {
+        let mut result: HashMap<(u64, u64), Vec<_>> = HashMap::new();
+        for t in self.tracepoints.iter().filter_map(|x| x.as_ref()) {
+            let Tracepoint {
+                matchings_index,
+                waypoint_index,
+                location,
+                ..
+            } = *t;
+
+            if let Some(leg) = self.matchings[matchings_index].legs.get(waypoint_index) {
+                leg.annotation
+                    .nodes
+                    .as_slice()
+                    .windows(2)
+                    .for_each(|window| {
+                        let k = (window[0], window[1]);
+                        if result.contains_key(&k) {
+                            result.get_mut(&k).unwrap().push(location);
+                        } else {
+                            let locations = Vec::new();
+                            result.insert(k, locations);
+                        }
+                    });
+            }
+        }
+        result
+    }
+}
